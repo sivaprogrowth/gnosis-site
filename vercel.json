@@ -3,6 +3,8 @@
   "buildCommand": "npx quartz build",
   "outputDirectory": "public",
   "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
     "api/ask.ts": {
       "maxDuration": 60
