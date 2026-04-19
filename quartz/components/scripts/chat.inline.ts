@@ -187,23 +187,30 @@ function init() {
   const root = $("#gnosis-chat")
   if (!root) return
 
+  // Idempotent: Quartz fires `nav` on first load AND on SPA nav, and we also
+  // call init() directly to catch scripts that loaded after the first `nav`.
+  // Without a guard, handlers bind twice on first load and cancel each other
+  // out (toggle → toggle → no net change). Mark the root once we've wired it.
+  if (root.dataset.gnosisChatReady === "1") return
+  root.dataset.gnosisChatReady = "1"
+
   const toggle = $("#gnosis-chat-toggle")
   const close = $("#gnosis-chat-close")
   const form = $("#gnosis-chat-form") as HTMLFormElement | null
   const input = $("#gnosis-chat-input") as HTMLTextAreaElement | null
 
-  toggle?.addEventListener("click", () => {
-    root.classList.toggle("collapsed")
-    root.classList.toggle("expanded")
-    if (root.classList.contains("expanded")) {
-      input?.focus()
-    }
-  })
-
-  close?.addEventListener("click", () => {
+  const openPanel = () => {
+    root.classList.remove("collapsed")
+    root.classList.add("expanded")
+    input?.focus()
+  }
+  const closePanel = () => {
     root.classList.remove("expanded")
     root.classList.add("collapsed")
-  })
+  }
+
+  toggle?.addEventListener("click", openPanel)
+  close?.addEventListener("click", closePanel)
 
   form?.addEventListener("submit", (e) => {
     e.preventDefault()
@@ -226,15 +233,24 @@ function init() {
     input.style.height = Math.min(input.scrollHeight, 140) + "px"
   })
 
-  // Suggestion chips
+  // Suggestion chips — auto-open panel when clicked from empty state
   root.querySelectorAll<HTMLButtonElement>(".gnosis-chat-suggestion").forEach((btn) => {
     btn.addEventListener("click", () => {
       const prompt = btn.dataset.prompt || btn.textContent || ""
+      if (!root.classList.contains("expanded")) openPanel()
       sendMessage(prompt)
     })
   })
 }
 
-// Quartz dispatches `nav` on SPA navigation; `DOMContentLoaded` for first load.
+// Quartz dispatches `nav` on SPA navigation AND on the first page load (after
+// DOMContentLoaded). Listen once; don't also call init() synchronously,
+// which races the initial `nav` and double-binds handlers.
 document.addEventListener("nav", init)
-init()
+// Safety net: if `nav` never fires (plain-HTML fallback), still initialize
+// once DOM is parsed. The idempotency guard above prevents double-binding.
+if (document.readyState !== "loading") {
+  init()
+} else {
+  document.addEventListener("DOMContentLoaded", init, { once: true })
+}
